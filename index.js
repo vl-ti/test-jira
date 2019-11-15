@@ -1,6 +1,8 @@
 const JiraClient = require('jira-connector')
 const chokidar = require('chokidar')
-const readline = require('readline');
+const readline = require('readline')
+const fs = require('fs')
+const path = require('path')
 
 const CONFIG = {
     "HOST": "",
@@ -12,6 +14,7 @@ const CONFIG = {
     "IMAGES": "/Users/vladimir/Documents/tco19/jira_helper/image_test",
     "VIDEOS": "/Users/vladimir/Documents/tco19/jira_helper/image_test",
     "LOGS": "/Users/vladimir/Documents/tco19/jira_helper/image_test",
+    "TRASH_DIR": "/Users/vladimir/Documents/tco19/trash/",
     "OS_IMAGE": null,
 }
 
@@ -80,7 +83,7 @@ async function getMyIssues() {
         videos.push(path)
     })
     videoWatcher.on('unlink', (path) => {
-        const videos = videos.indexOf(path)
+        const index = videos.indexOf(path)
         if (index == -1) {
             console.error(`ERROR: Can't find ${path} in image list`)
             return
@@ -94,7 +97,7 @@ async function getMyIssues() {
         logs.push(path)
     })
     logWatcher.on('unlink', (path) => {
-        const logs = logs.indexOf(path)
+        const index = logs.indexOf(path)
         if (index == -1) {
             console.error(`ERROR: Can't find ${path} in image list`)
             return
@@ -132,34 +135,40 @@ async function getMyIssues() {
         }
 
         if (line === 'y') {
+            const imagesCopy = [ ... images ]
+            const videosCopy = [ ...videos ]
+            const logsCopy = [ ...logs ]
+
             let promises = []
 
             if (!issue) {
                 console.error('ERROR: issue === null. Please refresh')
             }
 
-            promises = images.map((path) => {
+            promises = imagesCopy.map((path) => {
                 return jira.issue.addAttachment({
                     issueKey: issue.key,
                     filename: path,
                 })
             })
-            if (videos[videos.length-1]) {
+            const videoFile = videosCopy[videosCopy.length-1] || null
+            if (videoFile) {
                 promises.push(jira.issue.addAttachment({
                     issueKey: issue.key,
-                    filename: videos[videos.length-1]
+                    filename: videoFile
                 }))
             } else {
                 console.warn('No video attached')
             }
 
-            if (logs[logs.length-1]) {
+            const logFile = logsCopy[logsCopy.length-1] || null
+            if (logFile) {
                 promises.push(jira.issue.addAttachment({
                     issueKey: issue.key,
-                    filename: logs[logs.length-1]
+                    filename: logFile
                 }))
             } else {
-                console.warn('No videlogso attached')
+                console.warn('No log attached')
             }
 
             if (CONFIG.OS_IMAGE) {
@@ -171,6 +180,27 @@ async function getMyIssues() {
 
             await Promise.all(promises)
             console.log('Uploaded')
+
+            imagesCopy.map((file) => {
+                fs.rename(file, `${CONFIG.TRASH_DIR}/${path.basename(file)}`, (err) => {
+                    if (err) console.error(err);
+                    console.log('Rename complete!');
+                  })
+            })
+
+            if (videoFile) {
+                fs.rename(videoFile, `${CONFIG.TRASH_DIR}/${path.basename(videoFile)}`, (err) => {
+                    if (err) console.error(err)
+                    console.log('Rename complete!');
+                  })
+            }
+            if (logFile) {
+                fs.rename(logFile, `${CONFIG.TRASH_DIR}/${path.basename(logFile)}`, (err) => {
+                    if (err) console.error(err);
+                    console.log('Rename complete!');
+                  })
+            }
+            console.log('Removed')
         }
     })
 })()
